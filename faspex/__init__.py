@@ -1,0 +1,1 @@
+from .faspex import FaspexCLI

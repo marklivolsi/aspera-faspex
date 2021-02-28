@@ -1,5 +1,8 @@
 import shutil
 import subprocess
+from HTMLParser import HTMLParser
+
+from bs4 import BeautifulSoup
 
 
 class FaspexCLI(object):
@@ -23,9 +26,6 @@ class FaspexCLI(object):
     def _download_package(self):
         raise NotImplementedError
 
-    def _parse_xml_response(self, xml):
-        raise NotImplementedError
-
     def list_inbox_packages(self):
         return self._list_packages('inbox')
 
@@ -41,7 +41,57 @@ class FaspexCLI(object):
         flags = ['--xml', '--{}'.format(mailbox)]
         cmd = self._build_cmd('list', flags)
         response, errors = self._call_faspex(cmd)
-        return self._parse_xml_response(response)
+        return self._parse_list_packages_xml_response(response)
+
+    def _parse_list_packages_xml_response(self, xml):
+        packages = []
+        xml = xml[xml.index('<'):]
+        soup = BeautifulSoup(xml, 'xml')
+        entries = soup.find_all('entry')
+        if not entries:
+            return None
+        html_parser = HTMLParser()
+        for entry in entries:
+            package = {
+                'title': self._get_standard_child(entry, 'title'),
+                'delivery_id': int(self._get_standard_child(entry, 'package:delivery_id')),
+                'download_link': html_parser.unescape(entry.findChild('link', {'rel': 'package'})['href']),
+                'enclosure_link': html_parser.unescape(entry.findChild('link', {'rel': 'enclosure'})['href']),
+                'attention_to': entry.findChild('metadata').findChild('field', {'name': 'Attention To:'}).text,
+                'uuid': self._get_standard_child(entry, 'id'),
+                'sequence_id': self._get_standard_child(entry, 'sequence_id'),
+                'published_timestamp': self._get_standard_child(entry, 'published'),
+                'updated_timestamp': self._get_standard_child(entry, 'updated'),
+                'completed_timestamp': self._get_standard_child(entry, 'completed'),
+                'author': self._get_entry_author(entry),
+                'recipients': self._get_entry_recipients(entry),
+                'parent_delivery_id': self._get_standard_child(entry, 'package:parent_delivery_id'),
+            }
+            packages.append(package)
+        return packages
+
+    def _get_entry_author(self, entry):
+        author = entry.findChild('author')
+        return {
+            'name': self._get_standard_child(author, 'name'),
+            'email': self._get_standard_child(author, 'email')
+        }
+
+    def _get_entry_recipients(self, entry):
+        recipient_list = []
+        recipients = entry.find_all('package:to')
+        for recipient in recipients:
+            data = {
+                'name': self._get_standard_child(recipient, 'package:name'),
+                'email': self._get_standard_child(recipient, 'package:email'),
+                'delivery_id': self._get_standard_child(recipient, 'package:recipient_delivery_id')
+            }
+            recipient_list.append(data)
+        return recipient_list
+
+    @staticmethod
+    def _get_standard_child(entry, tag):
+        return entry.findChild(tag).text
 
     def _build_cmd(self, sub_command, flags=None):
         cmd = [self.aspera_executable_path, 'faspex', sub_command, '--host', self.url, '--username', self.user,
