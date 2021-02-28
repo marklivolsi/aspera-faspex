@@ -26,8 +26,25 @@ class FaspexCLI(object):
     def _parse_xml_response(self, xml):
         raise NotImplementedError
 
-    def _build_cmd(self, sub_cmd, flags=None):
-        cmd = [self.aspera_executable_path, 'faspex', sub_cmd, '--host', self.url, '--username', self.user,
+    def list_inbox_packages(self):
+        return self._list_packages('inbox')
+
+    def list_sent_packages(self):
+        return self._list_packages('sent')
+
+    def list_archived_packages(self):
+        return self._list_packages('archived')
+
+    def _list_packages(self, mailbox):
+        if mailbox not in ['inbox', 'sent', 'archived']:
+            raise ValueError('mailbox must be either inbox, sent, or archived')
+        flags = ['--xml', '--{}'.format(mailbox)]
+        cmd = self._build_cmd('list', flags)
+        response, errors = self._call_faspex(cmd)
+        return self._parse_xml_response(response)
+
+    def _build_cmd(self, sub_command, flags=None):
+        cmd = [self.aspera_executable_path, 'faspex', sub_command, '--host', self.url, '--username', self.user,
                '--password', self.password, '-U', self.url_prefix]
         if flags:
             cmd += flags
