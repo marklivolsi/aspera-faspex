@@ -42,6 +42,10 @@ class FaspexCLI(object):
         self._call_faspex(cmd)
 
     @staticmethod
+    def _build_flags(flag_dict):
+        raise NotImplementedError
+
+    @staticmethod
     def _get_list_flags(flag_name, flag_values):
         flags = []
         if flag_values:
