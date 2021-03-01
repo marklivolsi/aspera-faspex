@@ -1,3 +1,4 @@
+import os
 import shutil
 import subprocess
 from HTMLParser import HTMLParser
@@ -14,16 +15,46 @@ class FaspexCLI(object):
         self.url_prefix = url_prefix
         self.aspera_executable_path = aspera_executable_path or shutil.which('aspera')
 
-    def send_package(self):
-        raise NotImplementedError
+    def send_package(self, filepath, title, recipients, note=None, file_encrypt_password=None, cc_on_upload=None,
+                     cc_on_download=None):
+        if not os.path.exists(filepath):
+            raise IOError('Filepath could not be found: {}'.format(filepath))
+        elif not recipients:
+            raise ValueError('You must provide a list of recipients')
+        elif not title:
+            raise ValueError('You must provide a title')
 
-    def download_package_by_title(self, title):
-        raise NotImplementedError
+        flags = ['--file', filepath, '--title', title]
 
-    def download_package_by_id(self, id_):
-        raise NotImplementedError
+        recipient_flags = self._get_list_flags('--recipient', recipients)
+        cc_on_upload_flags = self._get_list_flags('--cc-on-upload', cc_on_upload)
+        cc_on_download_flags = self._get_list_flags('--cc-on-download', cc_on_download)
 
-    def _download_package(self):
+        flags += recipient_flags + cc_on_upload_flags + cc_on_download_flags
+
+        if note:
+            flags += ['--note', note]
+        if file_encrypt_password:
+            self._set_aspera_scp_filepass(file_encrypt_password)
+            flags.append('--file-encrypt')
+
+        cmd = self._build_cmd('send', flags)
+        self._call_faspex(cmd)
+
+    @staticmethod
+    def _get_list_flags(flag_name, flag_values):
+        flags = []
+        if flag_values:
+            for val in flag_values:
+                flag = [flag_name, val]
+                flags += flag
+        return flags
+
+    @staticmethod
+    def _set_aspera_scp_filepass(password):
+        os.environ['ASPERA_SCP_FILEPASS'] = str(password)
+
+    def download_package(self):
         raise NotImplementedError
 
     def list_inbox_packages(self):
